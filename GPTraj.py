@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 
 def state_transition(t, s):
@@ -48,6 +49,38 @@ def theta(t, ti, support_states, Qc, mean_prior = None):
     next_effect = beta(t, ti, Qc) @ (support_states[ti + 1] - mean_prior(ti + 1))
     return mean + prev_effect + next_effect
 
+def gen_covar_prior(covar0, Qc):
+    def covar_prior(a, b):
+        ub = min(a, b)
+        v00 = lambda s: ((s - a) ** 3 * (6 * s ** 2 + (3 * a - 15 * b) * s + 10 * b ** 2 - 5 * a * b + a ** 2)) / 120
+        v01 = lambda s: -((s - a) ** 3 * (3 * s - 4 * b + a)) / 24
+        v10 = lambda s: -((s - b) ** 3 * (3 * s + b - 4 * a)) / 24
+        F = lambda s: np.array([
+            [v00(s), v01(s), (s * a ** 2 - s ** 2 * a + s ** 3 / 3) / 2],
+            [v10(s), s * a * b - s ** 2 * (a + b) / 2 + s ** 3 / 3, s * a - s ** 2 / 2],
+            [(s * b ** 2 - s ** 2 * b + s ** 3 / 3) / 2, s * b - s ** 2 / 2, s]
+        ])
+        return state_transition(a, 0) @ covar0 @ state_transition(b, 0).T + Qc * (F(ub) - F(0))
+    return covar_prior
+
+def gen_covar_prior2(covar0, Qc):
+    def covar_prior(a, b):
+        from scipy.integrate import quad
+        v00 = lambda s: (a-s)**2*(b-s)**2/4
+        v01 = lambda s: (a-s)**2 * (b-s)/2
+        v02 = lambda s: (a-s)**2/2
+        v10 = lambda s: (a-s)*(b-s)**2/2
+        v11 = lambda s: (a-s)*(b-s)
+        v12 = lambda s: a-s
+        v20 = lambda s: (b-s)**2/2
+        v21 = lambda s: b-s
+        v22 = lambda s: 1
+        return state_transition(a, 0) @ covar0 @ state_transition(b, 0).T + Qc * np.array([
+            [quad(v00, 0, min(a, b))[0], quad(v01, 0, min(a, b))[0], quad(v02, 0, min(a, b))][0],
+            [quad(v10, 0, min(a, b))[0], quad(v11, 0, min(a, b))[0], quad(v12, 0, min(a, b))][0],
+            [quad(v20, 0, min(a, b))[0], quad(v21, 0, min(a, b))[0], quad(v22, 0, min(a, b))][0]
+        ])
+    return covar_prior
 
 class GPTraj:
     
@@ -128,6 +161,40 @@ class GPTraj:
         ti = int(t // 1)
         if ti == N: return support_states[-1]
         return theta(t, ti, support_states, self.Qc)
+
+    def plot(self):
+        
+        t = 0
+        dt = 0.05
+        end = len(self.support_states) - 1
+        
+        X = []
+        Y = []
+        while t <= end:
+            x, y, r = gptraj.at(t)[0]
+            X.append(x)
+            Y.append(y)
+            t = round(t + dt, 2)
+        
+        plt.plot(X, Y, "ro-")
+        plt.show(block=False)
+    
+    def optimize(self, epochs=10):
+        
+        N = len(self.support_states) - 1
+        assert N >= 1
+        support_states = np.array([x.mean for x in self.support_states])
+        covar_prior = gen_covar_prior(support_states[0], self.Qc)
+        
+        K = np.zeros((N+1, N+1, self.D*self.V, self.D*self.V))
+        for i in range(N+1):
+            for j in range(N+1):
+                K[i,j] = covar_prior(i, j).reshape(self.D*self.V, self.D*self.V)
+        
+        lr = 1e-5
+    
+        # for i in range(epochs):
+        #     print()
         
 
 if __name__ == "__main__":
@@ -147,10 +214,14 @@ if __name__ == "__main__":
             .with_R(0, 0, 0)
     )
     
-    print()
-    t = 0
-    dt = 0.05
-    while round(t, 3) <= 2:
-        print(" ".join([f"{t:<10}"] + [f"{round(x, 5):<10}" for x in gptraj.at(t).flatten()]))
-        t = round(t + dt, 2)
-    print()
+    # print()
+    # t = 0
+    # dt = 0.05
+    # while round(t, 3) <= 2:
+    #     print(" ".join([f"{t:<10}"] + [f"{round(x, 5):<10}" for x in gptraj.at(t).flatten()]))
+    #     t = round(t + dt, 2)
+    # print()
+    
+    gptraj.plot()
+    gptraj.optimize(10)
+    input()
