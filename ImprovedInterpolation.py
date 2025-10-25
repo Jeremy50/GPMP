@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 
 D = 3 # Locked for this implementation
@@ -27,20 +28,47 @@ def Qinv(ta, tb, Qc):
         [   20 * dt ** 2,  -12 * dt ** 3,   3 * dt ** 4]
     ])
 
-def gen_traj(states, Qc):
+def gen_traj(states, Qc, precision=1e-5):
     prior_mean_func = lambda t: state_transition(t, 0) @ states[0]
+    state2state = state_transition(1, 0)
     def theta_func(t):
         assert t <= len(states) - 1
         ti = int(t)
-        if (abs(t - ti) < 1e-5): return states[ti]
+        if (abs(t - ti) < precision): return states[ti]
         prev2cur = state_transition(t, ti)
         cur2next = state_transition(ti+1, t)
         next_effect = Q(ti, t, Qc) @ cur2next.T @ Qinv(ti, ti+1, Qc)
-        prev_effect = prev2cur - next_effect @ cur2next
+        prev_effect = prev2cur - next_effect @ state2state
         prev2cur_delta = states[ti] - prior_mean_func(ti)
         cur2next_delta = states[ti+1] - prior_mean_func(ti+1)
         return prior_mean_func(t) + prev_effect @ prev2cur_delta + next_effect @ cur2next_delta
     return theta_func
+
+def plot_traj(traj, a=0, b=3, dt=0.02, precision=1e-5):
+    
+    stateX = []
+    stateY = []
+    interX = []
+    interY = []
+    
+    for i in range(a, int(b/dt)+1):
+        
+        t = i * dt
+        ti = int(t)
+        x, y = traj(i*dt)[0][:2]
+        interX.append(x)
+        interY.append(y)
+        
+        if (abs(ti - t) < precision):
+            stateX.append(x)
+            stateY.append(y)
+
+    plt.title("GPMP Trajectory")
+    plt.xlabel("Robot X")
+    plt.ylabel("Robot Y")
+    plt.plot(stateX, stateY, marker="*", color="green", linestyle="None", markersize=15)
+    plt.plot(interX, interY, marker="o", color="black", markersize=3)
+    plt.show()
 
 if __name__ == "__main__":
     
@@ -52,8 +80,8 @@ if __name__ == "__main__":
         V = 2
         u = np.random.randn(N+1, D, V)
         K = np.zeros((N+1, N+1, D, V, D, V))
-        #print(u[:, :1, :2].reshape(N+1, 2))
-    
+        print(u[:, :1, :2].reshape(N+1, 2))
+
     else:
         
         D = 3
@@ -70,3 +98,4 @@ if __name__ == "__main__":
     traj = gen_traj(u, Qc)
     for i in range(0, N*100+1):
         print(i/100, traj(i/100))
+    plot_traj(traj, 0, N)
