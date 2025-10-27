@@ -70,6 +70,27 @@ def plot_traj(traj, a=0, b=3, dt=0.02, precision=1e-5):
     plt.plot(stateX, stateY, marker="*", color="green", linestyle="None", markersize=15)
     plt.plot(interX, interY, marker="o", color="black", markersize=3)
     plt.show()
+    
+def gen_M(N, n_ip=5):
+    I = np.eye(D)
+    M = np.zeros((N*n_ip+N+1, N+1, D, D))
+    state2state = state_transition(1, 0)
+    qinv_static = Qinv(0, 1, Qc)
+    for i in range(N):
+        M[i*(n_ip+1), i] = I
+        block = np.zeros((n_ip, 2, D, D))
+        prev_effects = []
+        next_effects = []
+        for j in range(1, n_ip+1):
+            prev2cur = state_transition(i, j)
+            cur2next = state_transition(j+1, i)
+            next_effects.append(Q(j, i, Qc) @ cur2next.T @ qinv_static)
+            prev_effects.append(prev2cur - next_effects[-1] @ state2state)
+        block[:, 0] = prev_effects
+        block[:, 1] = next_effects
+        M[i*(n_ip+1)+1:(i+1)*(n_ip+1), i:i+2] = block
+    M[-1, -1] = I
+    return M
 
 if __name__ == "__main__":
     
@@ -77,7 +98,7 @@ if __name__ == "__main__":
     
     if test_mode:
     
-        N = 2
+        N = 5
         V = 2
         u = np.random.randn(N+1, D, V)
         K = np.zeros((N+1, N+1, D, V, D, V))
@@ -100,3 +121,9 @@ if __name__ == "__main__":
     for i in range(0, N*100+1):
         print(i/100, traj(i/100))
     plot_traj(traj, 0, N)
+    
+    n_ip = 4
+    Mt = gen_M(N, n_ip).transpose([1, 2, 0, 3]).reshape((N+1)*D, (N*n_ip+N+1)*D)
+    g_up = np.random.randn(N*n_ip+N+1, D, V).reshape((N*n_ip+N+1)*D, V)
+    x = (Mt @ g_up).reshape(N+1, D, V)
+    print(Mt.shape, g_up.shape, x.shape)
