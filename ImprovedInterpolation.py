@@ -31,13 +31,14 @@ def Qinv(ta, tb, Qc):
 def gen_traj(states, Qc, precision=1e-5):
     prior_mean_func = lambda t: state_transition(t, 0) @ states[0]
     state2state = state_transition(1, 0)
+    qinv_static = Qinv(0, 1, Qc)
     def theta_func(t):
         assert t <= len(states) - 1
         ti = int(t)
         if (abs(t - ti) < precision): return states[ti]
         prev2cur = state_transition(t, ti)
         cur2next = state_transition(ti+1, t)
-        next_effect = Q(ti, t, Qc) @ cur2next.T @ Qinv(ti, ti+1, Qc)
+        next_effect = Q(ti, t, Qc) @ cur2next.T @ qinv_static
         prev_effect = prev2cur - next_effect @ state2state
         prev2cur_delta = states[ti] - prior_mean_func(ti)
         cur2next_delta = states[ti+1] - prior_mean_func(ti+1)
