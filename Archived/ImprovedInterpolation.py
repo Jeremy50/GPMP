@@ -107,6 +107,20 @@ def plot_traj_int(traj, state_means, a=0, b=3, n_ip=None, dt=0.02, precision=1e-
     plt.legend()
     plt.show()
 
+def gen_covar_func(covar0, Qc):
+    def covar_func(a, b):
+        ub = min(a, b)
+        v00 = lambda s: ((s - a) ** 3 * (6 * s ** 2 + (3 * a - 15 * b) * s + 10 * b ** 2 - 5 * a * b + a ** 2)) / 120
+        v01 = lambda s: -((s - a) ** 3 * (3 * s - 4 * b + a)) / 24
+        v10 = lambda s: -((s - b) ** 3 * (3 * s + b - 4 * a)) / 24
+        F = lambda s: np.array([
+            [v00(s), v01(s), (s * a ** 2 - s ** 2 * a + s ** 3 / 3) / 2],
+            [v10(s), s * a * b - s ** 2 * (a + b) / 2 + s ** 3 / 3, s * a - s ** 2 / 2],
+            [(s * b ** 2 - s ** 2 * b + s ** 3 / 3) / 2, s * b - s ** 2 / 2, s]
+        ])
+        return state_transition(a, 0) @ covar0 @ state_transition(b, 0).T + Qc * (F(ub) - F(0))
+    return covar_func
+
 if __name__ == "__main__":
     
     test_mode = True
@@ -144,4 +158,9 @@ if __name__ == "__main__":
     Mt = M.transpose([1, 2, 0, 3]).reshape((N+1)*D, (N*n_ip+N+1)*D)
     g_up = np.random.randn(N*n_ip+N+1, D, V).reshape((N*n_ip+N+1)*D, V)
     factor_grads = (Mt @ g_up).reshape(N+1, D, V)
-    print(Mt.shape, g_up.shape, factor_grads.shape)
+    #print(Mt.shape, g_up.shape, factor_grads.shape)
+    
+    K = K.transpose([0, 1, 2, 4, 3, 5]).reshape((N+1)*(N+1)*V*V, D, D)
+    mean_func = lambda t: state_transition(t, 0) @ u[0]
+    covar_func = gen_covar_func(K[0, 0], Qc)
+    print(u.shape)
