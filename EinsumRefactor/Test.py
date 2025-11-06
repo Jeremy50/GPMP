@@ -11,10 +11,10 @@ n_ip = 10
 # Sample Inputs
 u0 = np.random.randn(D, V)
 uN = np.random.randn(D, V)
-u0[0] = [-0.8, -0.8]
-uN[0] = [0.8, 0.8]
-u0[1] = np.abs(u0[1])
-uN[1] = np.abs(uN[1])
+u0[0] = [-1, -1]
+uN[0] = [1, 1]
+u0[1] = u0[1] / 10 + [1, 1]
+uN[1] = uN[1] / 10 + [1, 1]
 u0[2] = 0
 uN[2] = 0
 
@@ -203,23 +203,18 @@ def gen_M(N, n_ip, Qc):
     return M
 M = gen_M(N, n_ip, Qc)
 
-obs = [
-    [(-0.4, -0.4), 0.25],
-    [(0.4, 0.4), 0.25]
-]
+obs = [(-0.4, -0.4), (0.4, 0.4)]
+r = 0.25
 e = 0.25
 num_obs = len(obs)
 
 obs_x = []
 obs_y = []
-obs_rad = []
-for xy, r in obs:
-    obs_x.append(xy[0])
-    obs_y.append(xy[1])
-    obs_rad.append(r)
+for x, y in obs:
+    obs_x.append(x)
+    obs_y.append(y)
 obs_x = np.array(obs_x).reshape(num_obs, 1)
 obs_y = np.array(obs_y).reshape(num_obs, 1)
-obs_rad = np.array(obs_rad).reshape(num_obs, 1)
 
 # Optimization
 s = np.copy(mean_prior)
@@ -232,11 +227,17 @@ for i in range(1000):
     # obs_grads[:, 0, 1] = 1
 
     xy = np.broadcast_to(inter_states[:, 0], (num_obs, N*n_ip+N+1, V))
-    dx = xy[:, :, 0] - obs_x
-    dy = xy[:, :, 1] - obs_y
-    dr = (dx ** 2 + dy ** 2) ** 0.5
-    mask = dr <= obs_rad + e
+    diff_x = obs_x - xy[:, :, 0]
+    diff_y = obs_y - xy[:, :, 1]
+    dist = (diff_x ** 2 + diff_y ** 2) ** 0.5
+    mask = dist <= r + e
+    mask_any = np.any(mask, axis=0)
+    
     obs_grads = np.random.randn(N*n_ip+N+1, D, V)
+    obs_grads[mask_any == False] *= 1e-5
+    r_grads = ((r + e) / dist[mask]) ** 2
+    obs_grads[mask_any, 0, 0] = 10 * r_grads * diff_x[mask]
+    obs_grads[mask_any, 0, 1] = 10 * r_grads * diff_y[mask]
 
     if i % 10 == 0:
         
@@ -264,7 +265,7 @@ for i in range(1000):
         ax.set_xlim(-1.5, 1.5)
         ax.set_ylim(-1.5, 1.5)
         
-        for xy, r in obs:
+        for xy in obs:
             ax.add_patch(plt.Circle(xy, r+e, color="y"))
             ax.add_patch(plt.Circle(xy, r, color="r"))
         
@@ -275,14 +276,13 @@ for i in range(1000):
         ax.plot(stateX, stateY, marker="*", color="green", linestyle="None", markersize=15, label="Support States")
         ax.plot(interX, interY, marker="o", color="black", markersize=3, label="Sampled States")
         plt.plot(inter_states[:, 0, 0], inter_states[:, 0, 1], marker="*", color="red", linestyle="None", markersize=5, label="Interpolated States")
-        mask = np.any(mask, axis=0)
-        plt.plot(inter_states[mask][:, 0, 0], inter_states[mask][:, 0, 1], marker="X", color="blue", linestyle="None", markersize=10, label="Obstable Affected States")
+        plt.plot(inter_states[mask_any][:, 0, 0], inter_states[mask_any][:, 0, 1], marker="X", color="blue", linestyle="None", markersize=10, label="Obstable Affected States")
         
         plt.legend()
         plt.savefig(f"TrajFrames/Frame{i//5}.png", dpi=100, bbox_inches='tight')
         plt.close()
     
-    ss_obs_grads = np.einsum("XYab,XYc->abc", M, obs_grads)
+    ss_obs_grads = np.einsum("XaYb,XYc->abc", M, obs_grads)
     dist_grads = np.einsum("abcXYZ,XYZ->abc", Kinv, mean_prior - s)
     grads = np.einsum("abcXYZ,XYZ->abc", covar_prior, 1e-1 * dist_grads + ss_obs_grads)
     s -= 1e-3 * grads
