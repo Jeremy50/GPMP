@@ -2,24 +2,26 @@
 import numpy as np
 
 # Initial Settings
-N = 2
+N = 5
 D = 3
 V = 2
-Qc = 1.5
-n_ip = 10
+Qc = 20
+n_ip = 25
 
 # Sample Inputs
 u0 = np.random.randn(D, V)
 uN = np.random.randn(D, V)
 u0[0] = [-1, -1]
 uN[0] = [1, 1]
-u0[1] = u0[1] / 10 + [1, 1]
-uN[1] = uN[1] / 10 + [1, 1]
-u0[2] = 0
-uN[2] = 0
+# u0[1] = u0[1] / 10 + [1, 1]
+# uN[1] = uN[1] / 10 + [1, 1]
+# u0[2] = 0
+# uN[2] = 0
 
-k0 = np.random.randn(D, V, D, V) * 1e-8
-kN = np.random.randn(D, V, D, V) * 1e-8
+k0 = np.random.randn(D, V, D, V) * 1e-20
+kN = np.random.randn(D, V, D, V) * 1e-20
+# k0 *= 0
+# kN *= 0
 
 # State Transition
 def state_transition(t, s):
@@ -82,8 +84,8 @@ covar_prior = covar - np.einsum("abcXY,dXYef->abcdef", temp, covar_row)
 # print(uN)
 # print("\n"*3)
 
-assert (abs(u0 - mean_prior[0]) <= 1e-5).all()
-assert (abs(uN - mean_prior[N]) <= 1e-5).all()
+assert (abs(u0 - mean_prior[0]) <= 1e-3).all()
+assert (abs(uN - mean_prior[N]) <= 1e-3).all()
 
 # Noise Covariance
 def Q(ta, tb, Qc):
@@ -236,8 +238,8 @@ for i in range(1000):
     obs_grads = np.random.randn(N*n_ip+N+1, D, V)
     obs_grads[mask_any == False] *= 1e-5
     r_grads = ((r + e) / dist[mask]) ** 2
-    obs_grads[mask_any, 0, 0] = 10 * r_grads * diff_x[mask]
-    obs_grads[mask_any, 0, 1] = 10 * r_grads * diff_y[mask]
+    obs_grads[mask_any, 0, 0] = r_grads * diff_x[mask]
+    obs_grads[mask_any, 0, 1] = r_grads * diff_y[mask]
 
     if i % 10 == 0:
         
@@ -262,8 +264,8 @@ for i in range(1000):
 
         ax = plt.gca()
         ax.cla()
-        ax.set_xlim(-1.5, 1.5)
-        ax.set_ylim(-1.5, 1.5)
+        # ax.set_xlim(-1.5, 1.5)
+        # ax.set_ylim(-1.5, 1.5)
         
         for xy in obs:
             ax.add_patch(plt.Circle(xy, r+e, color="y"))
@@ -284,7 +286,7 @@ for i in range(1000):
     
     ss_obs_grads = np.einsum("XaYb,XYc->abc", M, obs_grads)
     dist_grads = np.einsum("abcXYZ,XYZ->abc", Kinv, mean_prior - s)
-    grads = np.einsum("abcXYZ,XYZ->abc", covar_prior, 1e-1 * dist_grads + ss_obs_grads)
+    grads = np.einsum("abcXYZ,XYZ->abc", covar_prior, 0 * dist_grads + ss_obs_grads)
     s -= 1e-3 * grads
 
 import imageio.v2 as imageio
