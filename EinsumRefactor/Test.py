@@ -233,7 +233,10 @@ for i in range(1000):
         plt.savefig(f"TrajFrames/Frame{i//5}.png", dpi=100, bbox_inches='tight')
         plt.close()
         
-    obs_grads = np.random.randn(N*n_ip+N+1, D, V)
+    #obs_grads = np.random.randn(N*n_ip+N+1, D, V)
+    obs_grads = np.zeros((N*n_ip+N+1, D, V))
+    obs_grads[:, 0, 1] = 1
+    
     ss_obs_grads = np.einsum("XYab,XYc->abc", M, obs_grads)
     dist_grads = np.einsum("abcXYZ,XYZ->abc", Kinv, mean_prior - s)
     grads = np.einsum("abcXYZ,XYZ->abc", covar_prior, 1e-1 * dist_grads + ss_obs_grads)
