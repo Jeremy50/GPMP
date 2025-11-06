@@ -1,7 +1,7 @@
 # GPMP
 This repo is a basic implementation that samples from the GPMP prior with (d/dx)^2 control over two variables [x, y].
-### Sample Robot Trajectory Optimization
-![Robot Trajectory Optimzation](https://github.com/Jeremy50/GPMP/blob/main/Images/11-2_Render.gif)
+### Sample Robot Trajectory Optimization (Doesn't update from obstacles yet)
+![Robot Trajectory Optimzation w/ Obstacles](https://github.com/Jeremy50/GPMP/blob/main/Images/11-6_RenderObs1.gif)
 
 # Original Works:
   - Mukadam, Mustafa, et al. "Continuous-time Gaussian process motion planning via probabilistic inference." The International Journal of Robotics Research 37.11 (2018): 1319-1340.
