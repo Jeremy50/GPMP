@@ -8,8 +8,9 @@ class State:
         assert isinstance(time, float) and time >= 0
         assert isinstance(mean, np.ndarray) and len(mean.shape) == 2
         self.D, self.V = mean.shape
-        if covar is None: covar = np.zeros((self.D, self.V, self.D, self.V))
-        assert isinstance(covar, np.ndarray)
+        cshape = (self.D, self.V, self.D, self.V)
+        if covar is None: covar = np.zeros(cshape)
+        assert isinstance(covar, np.ndarray) and covar.shape == cshape
         
         self.time = time
         self.mean = mean

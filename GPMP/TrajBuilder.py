@@ -5,7 +5,7 @@ import numpy as np
 
 class TrajBuilder:
     
-    # Trajectory
+    # Trajectory Settings
     D: int = Utils.D
     V: int = None
     num_supp_states: int = 3
@@ -32,9 +32,9 @@ class TrajBuilder:
         self.num_supp_states = num_supp_states
         return self
 
-    def with_states(self, *states:list[State]):
+    def with_initial_states(self, *states:list[State]):
         assert states is not None and all(isinstance(x, State) and x.D == self.D and x.V == self.V for x in states)
-        self.initial_states += states[:]
+        self.initial_states = sorted(states, key=lambda x: x.time)
         return self
     
     def with_dt(self, dt:float):
@@ -57,42 +57,36 @@ class TrajBuilder:
         self.mean_reversion = mean_reversion
         return self
 
-    def build(self, seed=None):
+    def build(self):
         pass
     
     def isCompatible(self, traj:Traj):
-        pass
+        assert isinstance(traj, Traj)
+        if self.D != traj.D: return False
+        if self.V != traj.V: return False
+        if self.num_supp_states != traj.num_supp_states: return False
+        return True
     
     def makeCompatible(self, traj:Traj):
-        pass
+        self.V = traj.V
+        self.num_supp_states = traj.num_supp_states
     
-    def optimize(self, traj:Traj, epochs=1000, render=False):
-        pass
+# Refactor Seperately
+# def optimize(self, traj:Traj, epochs=1000, render=False):
+#     pass
 
 if __name__ == "__main__":
     
     D = Utils.D
     V = 2
     
-    tBuilder = TrajBuilder(V).with_states(
-        State(
-            0.0,
-            np.zeros((D, V)),
-            np.zeros((D, V, D, V))
-        ), State(
-            0.5,
-            np.random.randn(D, V) / 10,
-            np.zeros((D, V, D, V))
-        ), State(
-            2,
-            np.random.randn(D, V) / 10
-        )
+    tBuilder = TrajBuilder(V).with_initial_states(
+        State(0, np.zeros((D, V))),
+        State(1, np.random.randn(D, V).astype(np.float16)),
+        State(2, np.random.randn(D, V).astype(np.float16))
     )
     
-    traj1 = tBuilder.build()
-    traj2 = tBuilder.build()
-    traj3 = tBuilder.build()
-    
-    tBuilder.optimize(traj1)
-    tBuilder.optimize(traj2)
-    tBuilder.optimize(traj3)
+    tBuilder.with_num_supp_states(100)
+    traj1 = tBuilder.with_Qc(0.5).build()
+    # traj2 = tBuilder.with_Qc(1).build()
+    # traj3 = tBuilder.with_Qc(5).build()

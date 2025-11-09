@@ -1,16 +1,27 @@
-from TrajSeg import TrajSeg
 from State import State
+import numpy as np
+import Utils
 
 class Traj:
     
-    D: int = None
-    V: int = None
-    num_supp_states: int = None
-    initial_states: list[State] = None
-    segments: list[TrajSeg] = None
+    D = Utils.D
+    V = None
+    num_supp_states = None
+    initial_states = None
+    
+    def __init__(self, V):
+        self.V = V
+        
+    def with_num_supp_states(self, num_supp_states):
+        self.num_supp_states = num_supp_states
+        return self
+    
+    def with_initial_states(self, initial_states):
+        self.initial_states = initial_states
+        return self
     
     def sample(self, t):
-        pass
+        self
     
     def interpolate(self, dt=0.02):
         pass
