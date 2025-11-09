@@ -18,8 +18,8 @@ uN[0] = [1, 1]
 # u0[2] = 0
 # uN[2] = 0
 
-k0 = np.random.randn(D, V, D, V) * 1e-20
-kN = np.random.randn(D, V, D, V) * 1e-20
+k0 = np.zeros((D, V, D, V))#np.random.randn(D, V, D, V) * 1e-20
+kN = np.zeros((D, V, D, V))#np.random.randn(D, V, D, V) * 1e-20
 # k0 *= 0
 # kN *= 0
 
