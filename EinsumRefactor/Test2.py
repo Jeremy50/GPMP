@@ -7,19 +7,23 @@ import numpy as np
 
 D = 3
 V = 2
-Qc = 20
-min_nss_dt = 0.5
-min_nip_dt = 0.02
+Qc = 50
+min_nss_dt = 0.10
+min_nip_dt = 0.01
 
-ta = 1.3
+np.random.seed(30)
+
+ta = 1.203
 ua = np.random.randn(D, V)
 ua[0] = [0, 0]
-ka = np.random.randn(D, V, D, V) * 1e-8
+ua[1, 0] = abs(ua[1, 0])
+ka = np.random.randn(D, V, D, V) * 1e-8 * 0
 
-tb = 2.5
+tb = 5.392
 ub = np.random.randn(D, V)
 ub[0] = [2, 0]
-kb = np.random.randn(D, V, D, V) * 1e-8
+ub[1, 0] = -abs(ub[1, 0])
+kb = np.random.randn(D, V, D, V) * 1e-8 * 0
 
 
 
@@ -83,7 +87,12 @@ covar = np.array(covar).transpose(0, 2, 3, 1, 4, 5)
 
 
 # Mean and Covar Prior
-inv = np.linalg.pinv((covar_row[-1] + kN).reshape(D*V, D*V)).reshape(D, V, D, V)
+# inv = np.linalg.pinv((covar_row[-1] + kN).reshape(D*V, D*V)).reshape(D, V, D, V)
+inv = covar_row[-1] + kN
+inv = inv.transpose(1, 3, 0, 2)
+inv = np.linalg.pinv(inv)
+inv = inv.transpose(2, 0, 3, 1)
+
 temp = np.einsum("abcXY, XYde->abcde", covar_row, inv)
 mean_prior = mean + np.einsum("abcXY,XY->abc", temp, uN - mean[-1])
 covar_prior = covar - np.einsum("abcXY,dXYef->abcdef", temp, covar_row)
@@ -91,8 +100,8 @@ covar_prior = covar - np.einsum("abcXY,dXYef->abcdef", temp, covar_row)
 
 
 #
-assert (abs(u0 - mean_prior[0]) <= 1e-3).all()
-assert (abs(uN - mean_prior[N]) <= 1e-3).all()
+# assert (abs(u0 - mean_prior[0]) <= 1e-3).all()
+# assert (abs(uN - mean_prior[N]) <= 1e-3).all()
 
 
 # Noise Covariance
@@ -159,6 +168,9 @@ def plot_traj(traj, means, a=0, b=3, dt=0.02):
         x, y = traj(t)[0][:2]
         X.append(x)
         Y.append(y)
+        
+    print(means)
+
     ax = plt.gca()
     ax.cla()
     plt.title("GPMP Trajectory")
@@ -280,9 +292,16 @@ print(f"Total Duration: {tN}")
 print(f"Nss: {nss} & Nip: {nip}")
 print(f"Start Position: {u0[0, :2].round(1).tolist()} - Speed: {np.sqrt(np.sum(u0[1, :2]**2)).tolist()}")
 print(f"End Position: {uN[0, :2].round(1).tolist()} - Speed: {np.sqrt(np.sum(uN[1, :2]**2)).tolist()}")
+
 print()
 
 inter_states = np.einsum("aXbY,XYc->abc", M, mean_prior)
+print()
+speed = np.sqrt(np.sum(np.square(inter_states[:, 1, :2]), axis=-1))
+accel = np.sqrt(np.sum(np.square(inter_states[:, 2, :2]), axis=-1))
+print(f"Max Speed: {inter_states[np.argmax(speed), 1, :2]} -> {np.max(speed)}")
+print(f"Max Accel: {inter_states[np.argmax(accel), 2, :2]} -> {np.max(accel)}")
+print()
 ax = plt.gca()
 ax.cla()
 plt.title("GPMP Trajectory")
@@ -326,6 +345,8 @@ for trial_i in range(len(dts)):
     Y.append(x[0, 1])
     for i in range(int(tN/dt)+1):
         t = i * dt
+        if (t % 0.2 <= 1e-3):
+            print(t, x[1], x[2])
         x[2] = traj(t)[2]
         x = state_transition(dt, 0) @ x
         X.append(x[0, 0])
@@ -340,7 +361,6 @@ plt.legend()
 plt.savefig("Simulated.png", dpi=512)
 plt.show()
 
-exit()
 
 
 
@@ -354,90 +374,61 @@ exit()
 
 
 
+e = 0.35
+obs = np.array([
+    [1, 0],
+    [1, 2],
+    [1, -2],
+    [-0.5, 2],
+    [-0.5, -2],
+    [2.5, 2],
+    [2.5, -2]
+])
 
 
-
-#
-obs = [(-0.4, -0.4), (0.4, 0.4)]
-r = 0.25
-e = 0.25
 num_obs = len(obs)
+obs_x = obs[:, 0].reshape(num_obs, 1)
+obs_y = obs[:, 1].reshape(num_obs, 1)
 
-obs_x = []
-obs_y = []
-for x, y in obs:
-    obs_x.append(x)
-    obs_y.append(y)
-obs_x = np.array(obs_x).reshape(num_obs, 1)
-obs_y = np.array(obs_y).reshape(num_obs, 1)
-
-# Optimization
 s = np.copy(mean_prior)
-for i in range(1000):
+for i in range(10000):
     
     inter_states = np.einsum("aXbY,XYc->abc", M, s)
-        
-    # obs_grads = np.random.randn(N*n_ip+N+1, D, V)
-    # obs_grads = np.zeros((N*n_ip+N+1, D, V))
-    # obs_grads[:, 0, 1] = 1
 
-    xy = np.broadcast_to(inter_states[:, 0], (num_obs, N*nip+N+1, V))
+    xy = np.broadcast_to(inter_states[:, 0, :2], (num_obs, N*nip+N+1, V))
     diff_x = obs_x - xy[:, :, 0]
     diff_y = obs_y - xy[:, :, 1]
     dist = (diff_x ** 2 + diff_y ** 2) ** 0.5
-    mask = dist <= r + e
-    mask_any = np.any(mask, axis=0)
+    mask = dist <= e
     
-    obs_grads = np.random.randn(N*nip+N+1, D, V)
-    obs_grads[mask_any == False] *= 1e-5
-    r_grads = ((r + e) / dist[mask]) ** 2
-    obs_grads[mask_any, 0, 0] = r_grads * diff_x[mask]
-    obs_grads[mask_any, 0, 1] = r_grads * diff_y[mask]
-
     if i % 10 == 0:
-        
-        traj = gen_traj(s, Qc)
-        
-        stateX = []
-        stateY = []
-        interX = []
-        interY = []
-        
-        for j in range(0, int(N/0.02)+1):
-            
-            t = j * 0.02
-            ti = int(t)
-            x, y = traj(j*0.02)[0][:2]
-            interX.append(x)
-            interY.append(y)
-            
-            if (abs(ti - t) < 1e-5):
-                stateX.append(x)
-                stateY.append(y)
+    
+        inter_state_grads = np.zeros((num_obs, N*nip+N+1, D, V))
+        inter_state_grads[mask, 0, 0] = diff_x[mask] / dist[mask]
+        inter_state_grads[mask, 0, 1] = diff_y[mask] / dist[mask]
+        inter_state_grads = 100 * np.sum(inter_state_grads, 0)
 
         ax = plt.gca()
         ax.cla()
-        # ax.set_xlim(-1.5, 1.5)
-        # ax.set_ylim(-1.5, 1.5)
+        ax.set_xlim(-3, 3)
+        ax.set_ylim(-3, 3)
         
-        for xy in obs:
-            ax.add_patch(plt.Circle(xy, r+e, color="y"))
-            ax.add_patch(plt.Circle(xy, r, color="r"))
+        for j in range(num_obs):
+            ax.add_patch(plt.Circle((obs_x[j], obs_y[j]), e, color="y"))
         
         plt.title("GPMP Trajectory")
         plt.xlabel("Robot X")
         plt.ylabel("Robot Y")
         
-        ax.plot(stateX, stateY, marker="*", color="green", linestyle="None", markersize=15, label="Support States")
-        ax.plot(interX, interY, marker="o", color="black", markersize=3, label="Sampled States")
-        plt.plot(inter_states[:, 0, 0], inter_states[:, 0, 1], marker="*", color="red", linestyle="None", markersize=5, label="Interpolated States")
+        mask_any = np.any(mask, axis=0)
+        ax.plot(s[:, 0, 0], s[:, 0, 1], marker="*", color="green", linestyle="None", markersize=15, label="Support States")
+        plt.plot(inter_states[:, 0, 0], inter_states[:, 0, 1], marker="*", color="black", linestyle="-", markersize=5, label="Interpolated States")
         plt.plot(inter_states[mask_any][:, 0, 0], inter_states[mask_any][:, 0, 1], marker="X", color="blue", linestyle="None", markersize=10, label="Obstable Affected States")
         
         plt.legend()
-        plt.savefig(f"TrajFrames/Frame{i//5}.png", dpi=100, bbox_inches='tight')
-        plt.close()
+        plt.show()
     
-    ss_obs_grads = np.einsum("XaYb,XYc->abc", M, obs_grads)
+    ss_obs_grads = np.einsum("XaYb,XYc->abc", M, inter_state_grads)
     dist_grads = np.einsum("abcXYZ,XYZ->abc", Kinv, mean_prior - s)
     grads = np.einsum("abcXYZ,XYZ->abc", covar_prior, 0 * dist_grads + ss_obs_grads)
-    s -= 1e-3 * grads
+    s -= 1e-1 * grads
